@@ -40,6 +40,7 @@ public class HuffProcessor {
 	 * @param out
 	 *            Buffered bit stream writing to the output file.
 	 */
+	
 	public void compress(BitInputStream in, BitOutputStream out){
 
 		while (true){
@@ -49,6 +50,7 @@ public class HuffProcessor {
 		}
 		out.close();
 	}
+	
 	/**
 	 * Decompresses a file. Output file must be identical bit-by-bit to the
 	 * original.
@@ -58,13 +60,55 @@ public class HuffProcessor {
 	 * @param out
 	 *            Buffered bit stream writing to the output file.
 	 */
+	
 	public void decompress(BitInputStream in, BitOutputStream out){
-
-		while (true){
-			int val = in.readBits(BITS_PER_WORD);
-			if (val == -1) break;
-			out.writeBits(BITS_PER_WORD, val);
+		int bits = in.readBits(BITS_PER_INT);
+		if (bits != HUFF_TREE && bits != HUFF_NUMBER) {
+			throw new HuffException("illegal header starts with "+bits);
 		}
+
+		HuffNode root = readTreeHeader(in);
+		readCompressedBits(root,in,out);
 		out.close();
+	}
+
+	private void readCompressedBits(HuffNode root, BitInputStream in, BitOutputStream out) {
+		HuffNode cur = root;
+		while(true ) {
+			int bit = in.readBits(1);
+			if(bit == -1) {
+				throw new HuffException("bad input, no PSEUDO_EOF");
+			} else { 
+	               if (bit == 0) cur = cur.myLeft; 
+	               else cur = cur.myRight;           
+	               if (cur == null){
+	        		   break;
+	        	   }
+	               if (cur.myLeft == null && cur.myRight == null) { 
+	                   if (cur.myValue == PSEUDO_EOF) {
+	                       break; 
+	                   }
+	                   else {
+	                       out.writeBits(BITS_PER_WORD, cur.myValue);
+	                       cur = root; 
+	                   }
+	               }
+			}
+		}
+	}
+
+	private HuffNode readTreeHeader(BitInputStream in) {
+		int bit = in.readBits(1);
+		if(bit == -1) throw new HuffException("bad input, no PSEUDO_EOF");
+		if (bit == 0) {
+		    HuffNode left = readTreeHeader(in);
+		    HuffNode right = readTreeHeader(in);
+		    return new HuffNode(0,0,left,right);
+		}
+		else {
+			HuffNode value = new HuffNode(in.readBits(9),bit);
+		    return value;
+		}
+
 	}
 }
